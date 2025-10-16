@@ -1,6 +1,5 @@
 import streamlit as st
 import gspread
-import pandas as pd
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 
@@ -101,21 +100,32 @@ def main():
                     st.success("✅ Data successfully saved to Google Sheet!")
                     st.balloons()
                     
+                    # Show preview
+                    st.info("📋 Entry submitted successfully!")
+                    
                 except Exception as e:
                     st.error(f"❌ Error saving data: {str(e)}")
 
-    # Data viewing section
+    # Data viewing section - Simple version without pandas
     st.markdown("---")
     st.subheader("📊 Data Management")
     
-    if st.button("🔄 Refresh Data View"):
+    if st.button("🔄 View Recent Entries"):
         try:
             sheet = connect_gsheet()
             records = sheet.get_all_records()
             
             if records:
-                df = pd.DataFrame(records)
-                st.dataframe(df.tail(10))  # Show last 10 entries
+                # Show last 5 entries in a simple table
+                recent_entries = records[-5:]
+                
+                for i, entry in enumerate(recent_entries[::-1], 1):
+                    with st.expander(f"Entry {i} - {entry.get('Timestamp', 'N/A')}"):
+                        st.write(f"**Designer:** {entry.get('Designer Name', 'N/A')}")
+                        st.write(f"**Buyer:** {entry.get('Buyer', 'N/A')}")
+                        st.write(f"**Job:** {entry.get('Job', 'N/A')}")
+                        st.write(f"**Qty:** {entry.get('Qty', 'N/A')}")
+                
                 st.info(f"Total entries: {len(records)}")
             else:
                 st.info("No data found in the sheet yet.")
