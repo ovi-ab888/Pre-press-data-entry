@@ -3,62 +3,57 @@ import gspread
 import pandas as pd
 from datetime import datetime
 from google.oauth2.service_account import Credentials
-import json
 
 st.set_page_config(page_title="Google Sheet Data Entry", layout="wide")
 st.title("🧾 Google Sheet Data Entry Form")
 
-# ---------------------------------
-# 🔹 Google Credentials Setup
-# ---------------------------------
+# Google Sheets API scope
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
 
-@st.cache_resource
-def get_google_sheet_connection():
+def initialize_gsheet():
+    """Initialize and return Google Sheet connection"""
     try:
-        # Try Streamlit secrets first
-        if 'gcp_service_account' in st.secrets:
-            CREDS = Credentials.from_service_account_info(
-                st.secrets["gcp_service_account"], 
-                scopes=SCOPE
-            )
-            st.success("✅ Credentials loaded from Streamlit secrets")
-        else:
-            # Fallback to credentials.json for local development
-            CREDS = Credentials.from_service_account_file("credentials.json", scopes=SCOPE)
-            st.success("✅ Credentials loaded from local file")
+        # Load credentials from Streamlit secrets
+        creds_dict = {
+            "type": st.secrets["gcp_service_account"]["type"],
+            "project_id": st.secrets["gcp_service_account"]["project_id"],
+            "private_key_id": st.secrets["gcp_service_account"]["private_key_id"],
+            "private_key": st.secrets["gcp_service_account"]["private_key"].replace('\\n', '\n'),
+            "client_email": st.secrets["gcp_service_account"]["client_email"],
+            "client_id": st.secrets["gcp_service_account"]["client_id"],
+            "auth_uri": st.secrets["gcp_service_account"]["auth_uri"],
+            "token_uri": st.secrets["gcp_service_account"]["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["gcp_service_account"]["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": st.secrets["gcp_service_account"]["client_x509_cert_url"]
+        }
         
-        CLIENT = gspread.authorize(CREDS)
+        credentials = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
+        client = gspread.authorize(credentials)
+        
+        # Your Google Sheet ID
         SHEET_ID = "1TidiwlJn929qZHlU32tcyWoJMObTpIKjBbuUGp0oEqM"
-        SHEET = CLIENT.open_by_key(SHEET_ID).sheet1
+        sheet = client.open_by_key(SHEET_ID).sheet1
         
-        # Test connection
-        SHEET.get_all_records()
-        st.success("✅ Successfully connected to Google Sheet")
-        return SHEET
+        st.success("✅ Successfully connected to Google Sheets!")
+        return sheet
         
-    except gspread.exceptions.APIError as e:
-        st.error(f"🚫 Google Sheets API Error: {e}")
-        st.info("Please ensure:")
-        st.info("1. Google Sheets API is enabled in Google Cloud Console")
-        st.info("2. Service account has editor access to the sheet")
-        return None
-    except gspread.exceptions.SpreadsheetNotFound:
-        st.error("🚫 Spreadsheet not found. Please check the SHEET_ID")
-        return None
     except Exception as e:
-        st.error(f"🚫 Unexpected error: {e}")
+        st.error(f"❌ Connection failed: {str(e)}")
+        st.info("""
+        **Troubleshooting steps:**
+        1. Check if service account has access to the Google Sheet
+        2. Verify Google Sheets API is enabled
+        3. Ensure credentials are correct in secrets.toml
+        """)
         return None
 
 # Initialize connection
-SHEET = get_google_sheet_connection()
+SHEET = initialize_gsheet()
 
 if SHEET is None:
     st.stop()
 
-# ---------------------------------
-# 🔹 Data Entry Form
-# ---------------------------------
+# Data Entry Form
 FIELDS = [
     "Designer Name", "Buyer", "Job", "Machine", "Item Name",
     "UPS", "Color", "Set", "Plate", "Impression", "Qty"
@@ -69,56 +64,54 @@ st.subheader("Enter New Record")
 with st.form("entry_form"):
     cols = st.columns(2)
     data = {}
-    for i, f in enumerate(FIELDS):
+    for i, field in enumerate(FIELDS):
         with cols[i % 2]:
-            if f == "Qty":
-                data[f] = st.number_input(f, min_value=0, step=1, value=0)
+            if field == "Qty":
+                data[field] = st.number_input(field, min_value=0, step=1, value=0)
             else:
-                data[f] = st.text_input(f, value="")
+                data[field] = st.text_input(field, value="")
     
-    submitted = st.form_submit_button("Submit")
+    submitted = st.form_submit_button("Submit Data")
 
 if submitted:
-    # Validate required fields
-    required_fields = ["Designer Name", "Item Name", "Qty"]
-    missing_fields = [field for field in required_fields if not data.get(field)]
-    
-    if missing_fields:
-        st.error(f"❌ Please fill in required fields: {', '.join(missing_fields)}")
-    else:
+    if SHEET:
         try:
-            new_row = [data[f] for f in FIELDS]
+            # Prepare data row
+            new_row = [data[field] for field in FIELDS]
             new_row.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            
+            # Append to sheet
             SHEET.append_row(new_row)
             st.success("✅ Data successfully added to Google Sheet!")
             st.balloons()
+            
         except Exception as e:
-            st.error(f"❌ Failed to write to Google Sheet: {e}")
+            st.error(f"❌ Failed to write data: {str(e)}")
 
-# ---------------------------------
-# 🔹 Display existing data
-# ---------------------------------
+# Display existing data
 st.markdown("---")
 st.subheader("📊 Existing Records")
 
-try:
-    records = SHEET.get_all_records()
-    if records:
-        df = pd.DataFrame(records)
-        st.dataframe(df, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                "⬇️ Download CSV", 
-                df.to_csv(index=False), 
-                "sheet_data.csv",
-                "text/csv"
-            )
-        with col2:
-            st.write(f"**Total Records:** {len(df)}")
-    else:
-        st.info("📝 No records found in the sheet. Add your first record above!")
-        
-except Exception as e:
-    st.warning(f"⚠️ Couldn't load data from Google Sheet: {e}")
+if SHEET:
+    try:
+        records = SHEET.get_all_records()
+        if records:
+            df = pd.DataFrame(records)
+            st.dataframe(df, use_container_width=True)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    "📥 Download CSV",
+                    csv,
+                    "sheet_data.csv",
+                    "text/csv"
+                )
+            with col2:
+                st.metric("Total Records", len(df))
+        else:
+            st.info("No records found. Add your first record above!")
+            
+    except Exception as e:
+        st.warning(f"⚠️ Error loading data: {str(e)}")
