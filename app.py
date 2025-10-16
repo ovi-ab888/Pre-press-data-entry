@@ -1,39 +1,37 @@
+import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime
 
-# Google Sheet সংযোগ সেটআপ
-SCOPE = ["https://www.googleapis.com/auth/spreadsheets",
-         "https://www.googleapis.com/auth/drive"]
+# Streamlit Secrets থেকে credentials লোড
+creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"])
+client = gspread.authorize(creds)
 
-CREDS = Credentials.from_service_account_file("credentials.json", scopes=SCOPE)
-client = gspread.authorize(CREDS)
-
-# তোমার Google Sheet এর URL
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1TidiwlJn929qZHlU32tcyWoJMObTpIKjBbuUGp0oEqM/edit#gid=0"
 sheet = client.open_by_url(SHEET_URL).sheet1
 
-# ইনপুট নেওয়া
-print("🧾 Pre-press Data Entry")
-date = datetime.now().strftime("%Y-%m-%d")
-designer = input("Designer Name: ")
-buyer = input("Buyer: ")
-job = input("Job: ")
-machine = input("Machine: ")
-item = input("Item Name: ")
-ups = input("UPS: ")
-color = input("Color: ")
-set_ = input("Set: ")
-plate = input("Plate: ")
-impression = input("Impression: ")
-qty = input("Quantity: ")
-comment = input("Comment: ")
+st.title("🧾 Pre-Press Data Entry Form")
 
-# SL auto generate
-last_row = len(sheet.get_all_values())
-sl_no = last_row  # হেডার বাদে row count হিসেবে নিচ্ছি
+with st.form("data_entry_form"):
+    designer = st.text_input("Designer Name")
+    buyer = st.text_input("Buyer")
+    job = st.text_input("Job")
+    machine = st.text_input("Machine")
+    item = st.text_input("Item Name")
+    ups = st.text_input("UPS")
+    color = st.text_input("Color")
+    set_ = st.text_input("Set")
+    plate = st.text_input("Plate")
+    impression = st.text_input("Impression")
+    qty = st.text_input("Quantity")
+    comment = st.text_area("Comment")
 
-data = [sl_no, date, designer, buyer, job, machine, item, ups, color, set_, plate, impression, qty, comment]
+    submitted = st.form_submit_button("Submit")
 
-sheet.append_row(data)
-print("✅ ডেটা সফলভাবে Google Sheet-এ যুক্ত হয়েছে!")
+    if submitted:
+        from datetime import datetime
+        date = datetime.now().strftime("%Y-%m-%d")
+        last_row = len(sheet.get_all_values())
+        sl_no = last_row
+        data = [sl_no, date, designer, buyer, job, machine, item, ups, color, set_, plate, impression, qty, comment]
+        sheet.append_row(data)
+        st.success("✅ Data successfully saved to Google Sheet!")
