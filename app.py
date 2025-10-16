@@ -29,7 +29,7 @@ except Exception:
 # ---------------------------------
 try:
     CLIENT = gspread.authorize(CREDS)
-    SHEET_ID = "YOUR_SHEET_ID_HERE"   # <-- replace with your sheet ID (not CSV link)
+    SHEET_ID = "1TidiwlJn929qZHlU32tcyWoJMObTpIKjBbuUGp0oEqM"   # <-- replace with your sheet ID (not CSV link)
     SHEET = CLIENT.open_by_key(SHEET_ID).sheet1
 except Exception as e:
     st.error("🚫 Couldn't connect to Google Sheet. Possible causes:\n"
