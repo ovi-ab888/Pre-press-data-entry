@@ -1,123 +1,127 @@
 import streamlit as st
 import gspread
 import pandas as pd
-from datetime import datetime
 from google.oauth2.service_account import Credentials
+from datetime import datetime
 
-st.set_page_config(page_title="Google Sheet Data Entry", layout="wide")
-st.title("🧾 Google Sheet Data Entry Form")
+# Page configuration
+st.set_page_config(
+    page_title="PEPCO Data Processor",
+    page_icon="🏭",
+    layout="centered"
+)
 
-SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
+# Title and description
+st.title("🏭 PEPCO Data Processor")
+st.markdown("### Monitrms Automation")
+st.markdown("---")
 
-def connect_to_sheets():
-    try:
-        # Load credentials
-        secrets = st.secrets["gcp_service_account"]
-        
-        # Verify email domain
-        if "lam.gserviceaccount.com" in secrets["client_email"]:
-            st.error("❌ WRONG EMAIL DOMAIN: 'lam.gserviceaccount.com' found!")
-            st.error("Please use 'iam.gserviceaccount.com' in your secrets.toml")
-            return None
-        
-        # Create credentials
-        creds_dict = {
-            "type": secrets["type"],
-            "project_id": secrets["project_id"],
-            "private_key_id": secrets["private_key_id"],
-            "private_key": secrets["private_key"],
-            "client_email": secrets["client_email"],
-            "client_id": secrets["client_id"],
-            "auth_uri": secrets["auth_uri"],
-            "token_uri": secrets["token_uri"],
-            "auth_provider_x509_cert_url": secrets["auth_provider_x509_cert_url"],
-            "client_x509_cert_url": secrets["client_x509_cert_url"],
-            "universe_domain": secrets["universe_domain"]
-        }
-        
-        credentials = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
-        client = gspread.authorize(credentials)
-        
-        # Access sheet
-        SHEET_ID = "1TidiwlJn929qZHlU32tcyWoJMObTpIKjBbuUGp0oEqM"
-        sheet = client.open_by_key(SHEET_ID).sheet1
-        
-        # Test connection
-        sheet.get_all_records()
-        return sheet
-        
-    except gspread.exceptions.SpreadsheetNotFound:
-        st.error("❌ Sheet not found. Please check:")
-        st.error("1. Sheet ID is correct")
-        st.error("2. Service account is shared as Editor")
-        st.error(f"3. Shared with: {secrets['client_email']}")
-        return None
-    except gspread.exceptions.APIError as e:
-        st.error(f"❌ API Error: {e}")
-        st.error("Please check Google Sheets API is enabled")
-        return None
-    except Exception as e:
-        st.error(f"❌ Connection failed: {e}")
-        return None
-
-# Initialize connection
-with st.spinner("🔄 Connecting to Google Sheets..."):
-    SHEET = connect_to_sheets()
-
-if SHEET:
-    st.success("✅ Successfully connected to Google Sheets!")
+# Google Sheets connection function
+@st.cache_resource
+def connect_gsheet():
+    SCOPE = ["https://spreadsheets.google.com/feeds",
+             "https://www.googleapis.com/auth/drive"]
     
-    # Data Entry Form
-    FIELDS = [
-        "Designer Name", "Buyer", "Job", "Machine", "Item Name",
-        "UPS", "Color", "Set", "Plate", "Impression", "Qty"
-    ]
+    # Streamlit secrets theke credentials
+    creds_dict = st.secrets["gcp_service_account"]
+    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
+    client = gspread.authorize(creds)
+    
+    # Your Google Sheet link use kore connection
+    sheet = client.open_by_key("1TidiwlJn929qZHlU32tcyWoJMObTpIKjBbuUGp0oEqM").sheet1
+    return sheet
 
-    st.subheader("Enter New Record")
-    with st.form("entry_form"):
-        cols = st.columns(2)
-        data = {}
-        for i, field in enumerate(FIELDS):
-            with cols[i % 2]:
-                if field == "Qty":
-                    data[field] = st.number_input(field, min_value=0, step=1, value=0)
-                else:
-                    data[field] = st.text_input(field, value="")
-        submitted = st.form_submit_button("Submit Data")
+def main():
+    # Main data entry form
+    with st.form("pepco_data_form", clear_on_submit=True):
+        st.subheader("📝 Data Entry Form")
+        
+        # Two columns layout
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            designer_name = st.text_input("*Designer Name", placeholder="Enter designer name")
+            buyer = st.text_input("*Buyer", placeholder="Enter buyer name")
+            job = st.text_input("*Job", placeholder="Job reference")
+            machine = st.text_input("*Machine", placeholder="Machine name/number")
+            item_name = st.text_input("*Item Name", placeholder="Item description")
+        
+        with col2:
+            ups = st.text_input("*UPS", placeholder="UPS details")
+            color = st.text_input("*Color", placeholder="Color information")
+            set_field = st.text_input("*Set", placeholder="Set details")
+            plate = st.text_input("*Plate", placeholder="Plate information")
+            impression = st.text_input("*Impression", placeholder="Impression details")
+        
+        # Quantity input - full width
+        qty = st.number_input("*Qty", min_value=1, value=1, step=1)
+        
+        # Additional notes (optional)
+        comments = st.text_area("Additional Comments (Optional)", 
+                               placeholder="Any additional notes...")
+        
+        # Submit button
+        submitted = st.form_submit_button("🚀 Submit Data to Google Sheet")
+        
+        if submitted:
+            # Validation - check required fields
+            required_fields = [
+                designer_name, buyer, job, machine, item_name,
+                ups, color, set_field, plate, impression
+            ]
+            
+            if not all(field.strip() for field in required_fields):
+                st.error("❌ Please fill all required fields (*)")
+            else:
+                try:
+                    # Connect to Google Sheet
+                    sheet = connect_gsheet()
+                    
+                    # Prepare data for the sheet
+                    row_data = [
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),  # Timestamp
+                        designer_name.strip(),
+                        buyer.strip(),
+                        job.strip(),
+                        machine.strip(),
+                        item_name.strip(),
+                        ups.strip(),
+                        color.strip(),
+                        set_field.strip(),
+                        plate.strip(),
+                        impression.strip(),
+                        qty,
+                        comments.strip() if comments else ""  # Comments
+                    ]
+                    
+                    # Append to Google Sheet
+                    sheet.append_row(row_data)
+                    
+                    # Success message
+                    st.success("✅ Data successfully saved to Google Sheet!")
+                    st.balloons()
+                    
+                except Exception as e:
+                    st.error(f"❌ Error saving data: {str(e)}")
 
-    if submitted:
-        try:
-            new_row = [data[field] for field in FIELDS]
-            new_row.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            SHEET.append_row(new_row)
-            st.success("✅ Data successfully added to Google Sheet!")
-            st.balloons()
-        except Exception as e:
-            st.error(f"❌ Failed to write data: {e}")
-
-    # Display data
+    # Data viewing section
     st.markdown("---")
-    st.subheader("📊 Existing Records")
-    try:
-        records = SHEET.get_all_records()
-        if records:
-            df = pd.DataFrame(records)
-            st.dataframe(df, use_container_width=True)
-            st.download_button("📥 Download CSV", df.to_csv(index=False), "sheet_data.csv", "text/csv")
-        else:
-            st.info("📝 No records found. Add your first record above!")
-    except Exception as e:
-        st.warning(f"⚠️ Error loading data: {e}")
+    st.subheader("📊 Data Management")
+    
+    if st.button("🔄 Refresh Data View"):
+        try:
+            sheet = connect_gsheet()
+            records = sheet.get_all_records()
+            
+            if records:
+                df = pd.DataFrame(records)
+                st.dataframe(df.tail(10))  # Show last 10 entries
+                st.info(f"Total entries: {len(records)}")
+            else:
+                st.info("No data found in the sheet yet.")
+                
+        except Exception as e:
+            st.error(f"Error fetching data: {str(e)}")
 
-else:
-    st.error("""
-    🚫 **Connection Failed - Critical Issues:**
-    
-    1. **Email Domain Wrong**: You have 'lam.gserviceaccount.com' instead of 'iam.gserviceaccount.com'
-    2. **Private Key Format**: Base64 padding error in private key
-    
-    **Quick Fix:**
-    - Update secrets.toml with correct email domain
-    - Use triple quotes for private key
-    - Share sheet with correct email: `auto-generated@infra-signifier-471306-e2.iam.gserviceaccount.com`
-    """)
+if __name__ == "__main__":
+    main()
