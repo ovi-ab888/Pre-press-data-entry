@@ -1,66 +1,80 @@
 import streamlit as st
 import gspread
-from google.oauth2.service_account import Credentials
 import pandas as pd
 from datetime import datetime
+from google.oauth2.service_account import Credentials
+import json
 
-# Page setup
 st.set_page_config(page_title="Google Sheet Data Entry", layout="wide")
 st.title("🧾 Google Sheet Data Entry Form")
 
-from google.oauth2.service_account import Credentials
-
+# ---------------------------------
+# 🔹 Google Credentials Setup (works both locally & on Streamlit Cloud)
+# ---------------------------------
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
-CREDS = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPE)
-CLIENT = gspread.authorize(CREDS)
 
+try:
+    # if running on Streamlit Cloud with secrets
+    CREDS = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPE)
+except Exception:
+    # fallback for local run (with credentials.json)
+    try:
+        CREDS = Credentials.from_service_account_file("credentials.json", scopes=SCOPE)
+    except Exception as e:
+        st.error("❌ Couldn't load credentials. Please check credentials.json or Streamlit secrets.")
+        st.stop()
 
-# Google Sheet ID (replace with your own)
-SHEET_ID = "1TidiwlJn929qZHlU32tcyWoJMObTpIKjBbuUGp0oEqM"
-SHEET = CLIENT.open_by_key(SHEET_ID).sheet1
+# ---------------------------------
+# 🔹 Try connecting to Google Sheet
+# ---------------------------------
+try:
+    CLIENT = gspread.authorize(CREDS)
+    SHEET_ID = "YOUR_SHEET_ID_HERE"   # <-- replace with your sheet ID (not CSV link)
+    SHEET = CLIENT.open_by_key(SHEET_ID).sheet1
+except Exception as e:
+    st.error("🚫 Couldn't connect to Google Sheet. Possible causes:\n"
+             "- Wrong SHEET_ID\n"
+             "- Service account not shared as Editor\n"
+             "- Google Sheets API not enabled\n\n"
+             f"**Detailed error:** {e}")
+    st.stop()
 
-# Define form fields
+# ---------------------------------
+# 🔹 Data Entry Form
+# ---------------------------------
 FIELDS = [
-    "Designer Name",
-    "Buyer",
-    "Job",
-    "Machine",
-    "Item Name",
-    "UPS",
-    "Color",
-    "Set",
-    "Plate",
-    "Impression",
-    "Qty"
+    "Designer Name", "Buyer", "Job", "Machine", "Item Name",
+    "UPS", "Color", "Set", "Plate", "Impression", "Qty"
 ]
 
 st.subheader("Enter New Record")
 
-# Two-column layout form
 with st.form("entry_form"):
     cols = st.columns(2)
-    form_data = {}
-    for i, field in enumerate(FIELDS):
+    data = {}
+    for i, f in enumerate(FIELDS):
         with cols[i % 2]:
-            if field == "Qty":
-                form_data[field] = st.number_input(field, min_value=0, step=1)
+            if f == "Qty":
+                data[f] = st.number_input(f, min_value=0, step=1)
             else:
-                form_data[field] = st.text_input(field)
+                data[f] = st.text_input(f)
     submitted = st.form_submit_button("Submit")
 
-# Handle form submission
 if submitted:
-    if not form_data["Designer Name"] or not form_data["Item Name"]:
-        st.error("⚠️ Please fill at least 'Designer Name' and 'Item Name'")
-    else:
-        new_row = [form_data[f] for f in FIELDS]
+    try:
+        new_row = [data[f] for f in FIELDS]
         new_row.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         SHEET.append_row(new_row)
         st.success("✅ Data successfully added to Google Sheet!")
+    except Exception as e:
+        st.error(f"❌ Failed to write to Google Sheet: {e}")
 
-# Display existing data
+# ---------------------------------
+# 🔹 Display existing data
+# ---------------------------------
 st.markdown("---")
 st.subheader("📊 Existing Records")
+
 try:
     records = SHEET.get_all_records()
     if records:
@@ -68,6 +82,6 @@ try:
         st.dataframe(df, use_container_width=True)
         st.download_button("⬇️ Download CSV", df.to_csv(index=False), "sheet_data.csv")
     else:
-        st.info("No records found in the sheet.")
+        st.info("No records yet.")
 except Exception as e:
-    st.error(f"Unable to load data: {e}")
+    st.warning(f"⚠️ Couldn't load data from Google Sheet: {e}")
