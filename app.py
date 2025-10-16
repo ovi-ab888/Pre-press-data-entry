@@ -8,7 +8,7 @@ from pathlib import Path
 # App setup
 # ---------------------------
 st.set_page_config(page_title="Prepress Data Entry", layout="wide")
-st.title("🧾 Google Sheet (CSV) Data Entry Form")
+st.title("🧾 Prepress Data Entry Form")
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
