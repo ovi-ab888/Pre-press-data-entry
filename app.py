@@ -7,7 +7,7 @@ from pathlib import Path
 # ---------------------------
 # App setup
 # ---------------------------
-st.set_page_config(page_title="Google Sheet CSV Data Entry", layout="wide")
+st.set_page_config(page_title="Prepress Data Entry", layout="wide")
 st.title("🧾 Google Sheet (CSV) Data Entry Form")
 
 DATA_DIR = Path("data")
