@@ -8,10 +8,12 @@ from datetime import datetime
 st.set_page_config(page_title="Google Sheet Data Entry", layout="wide")
 st.title("🧾 Google Sheet Data Entry Form")
 
-# Google Sheets setup
+from google.oauth2.service_account import Credentials
+
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
-CREDS = Credentials.from_service_account_file("credentials.json", scopes=SCOPE)
+CREDS = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPE)
 CLIENT = gspread.authorize(CREDS)
+
 
 # Google Sheet ID (replace with your own)
 SHEET_ID = "1TidiwlJn929qZHlU32tcyWoJMObTpIKjBbuUGp0oEqM"
