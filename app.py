@@ -1,137 +1,37 @@
 import streamlit as st
 import gspread
-import pandas as pd
-from datetime import datetime
 from google.oauth2.service_account import Credentials
 
-st.set_page_config(page_title="Google Sheet Data Entry", layout="wide")
-st.title("🧾 Google Sheet Data Entry Form")
+st.title("🔧 Connection Test - NEW SERVICE ACCOUNT")
 
-# Google Sheets API scope
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
 
-@st.cache_resource
-def get_google_sheet():
-    """Initialize and return Google Sheet connection"""
-    try:
-        # Load credentials from Streamlit secrets
-        secrets = st.secrets["gcp_service_account"]
-        
-        creds_dict = {
-            "type": secrets["type"],
-            "project_id": secrets["project_id"], 
-            "private_key_id": secrets["private_key_id"],
-            "private_key": secrets["private_key"],
-            "client_email": secrets["client_email"],
-            "client_id": secrets["client_id"],
-            "auth_uri": secrets["auth_uri"],
-            "token_uri": secrets["token_uri"],
-            "auth_provider_x509_cert_url": secrets["auth_provider_x509_cert_url"],
-            "client_x509_cert_url": secrets["client_x509_cert_url"],
-            "universe_domain": secrets["universe_domain"]
-        }
-        
-        credentials = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
-        client = gspread.authorize(credentials)
-        
-        # Your Google Sheet ID
-        SHEET_ID = "1TidiwlJn929qZHlU32tcyWoJMObTpIKjBbuUGp0oEqM"
-        sheet = client.open_by_key(SHEET_ID).sheet1
-        
-        # Test connection
-        sheet.get_all_records()
-        
-        return sheet
-        
-    except Exception as e:
-        st.error(f"❌ Connection failed: {str(e)}")
-        return None
-
-# Initialize connection with loading state
-with st.spinner("🔄 Connecting to Google Sheets..."):
-    SHEET = get_google_sheet()
-
-if SHEET:
-    st.success("✅ Successfully connected to Google Sheets!")
+try:
+    st.write("📋 Step 1: Loading credentials...")
+    secrets = st.secrets["gcp_service_account"]
+    st.success("✅ Secrets loaded")
+    st.write(f"Client Email: {secrets['client_email']}")
     
-    # Data Entry Form
-    FIELDS = [
-        "Designer Name", "Buyer", "Job", "Machine", "Item Name",
-        "UPS", "Color", "Set", "Plate", "Impression", "Qty"
-    ]
-
-    st.subheader("Enter New Record")
-
-    with st.form("entry_form"):
-        cols = st.columns(2)
-        data = {}
-        for i, field in enumerate(FIELDS):
-            with cols[i % 2]:
-                if field == "Qty":
-                    data[field] = st.number_input(field, min_value=0, step=1, value=0)
-                else:
-                    data[field] = st.text_input(field, value="")
-        
-        submitted = st.form_submit_button("Submit Data")
-
-    if submitted:
-        try:
-            # Prepare data row
-            new_row = [data[field] for field in FIELDS]
-            new_row.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            
-            # Append to sheet
-            SHEET.append_row(new_row)
-            st.success("✅ Data successfully added to Google Sheet!")
-            st.balloons()
-            
-        except Exception as e:
-            st.error(f"❌ Failed to write data: {str(e)}")
-
-    # Display existing data
-    st.markdown("---")
-    st.subheader("📊 Existing Records")
-
-    try:
-        records = SHEET.get_all_records()
-        if records:
-            df = pd.DataFrame(records)
-            st.dataframe(df, use_container_width=True)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    "📥 Download CSV",
-                    csv,
-                    "sheet_data.csv",
-                    "text/csv"
-                )
-            with col2:
-                st.metric("Total Records", len(df))
-        else:
-            st.info("📝 No records found. Add your first record above!")
-            
-    except Exception as e:
-        st.warning(f"⚠️ Error loading data: {str(e)}")
-
-else:
-    st.error("""
-    🚫 **Could not connect to Google Sheets**
+    st.write("🔑 Step 2: Creating credentials...")
+    creds_dict = dict(secrets)
+    credentials = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
+    st.success("✅ Credentials created")
     
-    **Please ensure:**
-    1. ✅ **Google Sheets API is enabled** (you confirmed this is done)
-    2. 🔄 **Google Sheet is shared** with service account email as **Editor**
-    3. 📧 **Service account email:** `streamlit-sheet-app@infra-signifier-471306-e2.iam.gserviceaccount.com`
-    4. ⏰ **Wait 2-3 minutes** after sharing for permissions to update
+    st.write("🚀 Step 3: Authorizing client...")
+    client = gspread.authorize(credentials)
+    st.success("✅ Client authorized")
     
-    **Quick Check:**
-    - Open your Google Sheet
-    - Click 'Share' button  
-    - Verify the service account email is in the list with 'Editor' access
-    """)
+    st.write("📊 Step 4: Accessing sheet...")
+    SHEET_ID = "1TidiwlJn929qZHlU32tcyWoJMObTpIKjBbuUGp0oEqM"
+    sheet = client.open_by_key(SHEET_ID).sheet1
+    st.success("✅ Sheet accessed")
     
-    st.info("""
-    **Still having issues? Try the debug app:**
-    Create a new file called `debug_app.py` with the debug code provided above.
-    """)
+    st.write("📖 Step 5: Testing read operation...")
+    records = sheet.get_all_records()
+    st.success(f"✅ Read successful - {len(records)} records found")
+    
+    st.balloons()
+    st.success("🎉 ALL TESTS PASSED! Connection is working perfectly.")
+    
+except Exception as e:
+    st.error(f"❌ Failed: {e}")
