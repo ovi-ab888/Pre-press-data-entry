@@ -1,77 +1,47 @@
-import streamlit as st
-import pandas as pd
-import requests
+import gspread
+from google.oauth2.service_account import Credentials
 from datetime import datetime
-from pathlib import Path
 
-# ---------------------------
-# App setup
-# ---------------------------
-st.set_page_config(page_title="Google Sheet CSV Data Entry", layout="wide")
-st.title("🧾 Google Sheet (CSV) Data Entry Form")
+# -------------------------
+# STEP 1: Google Sheet সংযোগ সেটআপ
+# -------------------------
+SCOPE = ["https://www.googleapis.com/auth/spreadsheets",
+         "https://www.googleapis.com/auth/drive"]
 
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
-LOCAL_CSV = DATA_DIR / "entries.csv"
+CREDS = Credentials.from_service_account_file("credentials.json", scopes=SCOPE)
+client = gspread.authorize(CREDS)
 
-# 👉 তোমার Published Google Sheet CSV লিংক এখানে বসাও
-CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQTcDBYH733mtxPq9WnWm2J-WCNCkd9TKQMtxHeh1XPjiM_kDpkVZutjwo9bewfJ1cyF3PnkWLPuhl9/pub?gid=0&single=true&output=csv"
+# তোমার শিটের URL
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1TidiwlJn929qZHlU32tcyWoJMObTpIKjBbuUGp0oEqM/edit?gid=0#gid=0"
+sheet = client.open_by_url(SHEET_URL).sheet1
 
-# ---------------------------
-# Form fields
-# ---------------------------
-FIELDS = [
-    "Designer Name", "Buyer", "Job", "Machine", "Item Name",
-    "UPS", "Color", "Set", "Plate", "Impression", "Qty"
-]
+# -------------------------
+# STEP 2: ইনপুট ডেটা নেওয়া
+# -------------------------
+print("🧾 Pre-press Data Entry")
+date = datetime.now().strftime("%Y-%m-%d")
+designer = input("Designer Name: ")
+buyer = input("Buyer: ")
+job = input("Job: ")
+machine = input("Machine: ")
+item = input("Item Name: ")
+ups = input("UPS: ")
+color = input("Color: ")
+set_ = input("Set: ")
+plate = input("Plate: ")
+impression = input("Impression: ")
+qty = input("Quantity: ")
+comment = input("Comment: ")
 
-col1, col2 = st.columns([1, 1.2])
+# -------------------------
+# STEP 3: শিটে ডেটা যোগ করা
+# -------------------------
+# স্বয়ংক্রিয়ভাবে SL নম্বর তৈরি
+last_row = len(sheet.get_all_values())
+sl_no = last_row  # ধরছি প্রথম রো হেডার
 
-with col1:
-    st.subheader("Enter New Record")
+data = [sl_no, date, designer, buyer, job, machine, item, ups, color, set_, plate, impression, qty, comment]
 
-    with st.form("entry_form"):
-        cols = st.columns(2)
-        inputs = {}
-        for i, field in enumerate(FIELDS):
-            with cols[i % 2]:
-                if field == "Qty":
-                    inputs[field] = st.number_input(field, min_value=0, step=1)
-                else:
-                    inputs[field] = st.text_input(field)
+sheet.append_row(data)
 
-        submitted = st.form_submit_button("Save Locally")
-
-    if submitted:
-        row = {f: inputs[f] for f in FIELDS}
-        row["Timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        df_row = pd.DataFrame([row])
-        if LOCAL_CSV.exists():
-            df_row.to_csv(LOCAL_CSV, mode="a", header=False, index=False)
-        else:
-            df_row.to_csv(LOCAL_CSV, index=False)
-        st.success("✅ Data saved locally (not in Google Sheet).")
-
-# ---------------------------
-# Display Google Sheet (Published CSV)
-# ---------------------------
-with col2:
-    st.subheader("📊 Data from Published Google Sheet")
-    try:
-        df = pd.read_csv(CSV_URL)
-        st.dataframe(df, use_container_width=True)
-        st.download_button("⬇️ Download Sheet CSV", df.to_csv(index=False), "google_sheet.csv")
-    except Exception as e:
-        st.error(f"❌ Failed to load published Google Sheet CSV:\n\n{e}")
-
-# ---------------------------
-# Optional: Local entries viewer
-# ---------------------------
-st.markdown("---")
-st.subheader("📁 Locally Saved Entries")
-if LOCAL_CSV.exists():
-    df_local = pd.read_csv(LOCAL_CSV)
-    st.dataframe(df_local, use_container_width=True)
-    st.download_button("⬇️ Download Local Entries", df_local.to_csv(index=False), "entries_local.csv")
-else:
-    st.info("No local entries yet.")
+print("✅ ডেটা সফলভাবে Google Sheet-এ যুক্ত হয়েছে!")
